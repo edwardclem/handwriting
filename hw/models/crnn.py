@@ -74,7 +74,7 @@ class CRNN(L.LightningModule):
         # Predictions and targets
         pred_log_probs = self(images)  # (Seq_Len, Batch, Num_Classes)
         # All sequences are the same length after padding
-        input_lengths = torch.tensor([pred_log_probs.size(0)])
+        input_lengths = torch.tensor([pred_log_probs.size(0)] * pred_log_probs.size(1))
 
         loss = self.loss(pred_log_probs, target, input_lengths, target_lengths)
 
