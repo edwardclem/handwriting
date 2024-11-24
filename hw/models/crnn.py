@@ -51,13 +51,15 @@ class CRNN(L.LightningModule):
     def decode_preds(self, log_probs):
         # seq_len, batch, num_classes
         lprobs = log_probs.cpu().numpy()
-        decodes = [
-            beam_decode(lprobs[:, i, :])
-            for i in trange(lprobs.shape[1], desc="Decoding batch...")
-        ]
+        decodes, _ = zip(
+            *[
+                beam_decode(lprobs[:, i, :])
+                for i in trange(lprobs.shape[1], desc="Decoding batch...")
+            ]
+        )
         # convert all decodes to strings
         string_decodes = [
-            "".join(self.inverse_vocab[char] for char in dec) for dec in decodes
+            "".join(self.vocab["reverse"][char] for char in dec) for dec in decodes
         ]
         return string_decodes
 
