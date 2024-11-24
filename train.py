@@ -15,10 +15,18 @@ vocab = make_vocab(ds["train"])
 
 collate_fn_wrapped = partial(collate_fn, vocab=vocab)
 train_loader = DataLoader(
-    ds["train"], batch_size=16, shuffle=False, collate_fn=collate_fn_wrapped
+    ds["train"],
+    batch_size=16,
+    shuffle=False,
+    collate_fn=collate_fn_wrapped,
+    num_workers=3,
 )
 val_loader = DataLoader(
-    ds["validation"], batch_size=16, shuffle=False, collate_fn=collate_fn_wrapped
+    ds["validation"],
+    batch_size=16,
+    shuffle=False,
+    collate_fn=collate_fn_wrapped,
+    num_workers=3,
 )
 
 trainer = Trainer(

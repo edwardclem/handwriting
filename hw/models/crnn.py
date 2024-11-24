@@ -70,7 +70,7 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, _ = batch
 
         # Predictions and targets
-        pred_log_probs = self.crnn(images)  # (Seq_Len, Batch, Num_Classes)
+        pred_log_probs = self(images)  # (Seq_Len, Batch, Num_Classes)
         # All sequences are the same length after padding
         input_lengths = torch.tensor([pred_log_probs.size(0)])
 
@@ -85,15 +85,20 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, raw_seqs = batch
 
         # Predictions and targets
-        pred_log_probs = self.crnn(images)  # (Seq_Len, Batch, Num_Classes)
+        pred_log_probs = self(images)  # (Seq_Len, Batch, Num_Classes)
         # All sequences are the same length after padding
-        input_lengths = torch.tensor([pred_log_probs.size(0)])
-
+        input_lengths = torch.tensor([pred_log_probs.size(0)] * pred_log_probs.size(1))
         loss = self.loss(pred_log_probs, target, input_lengths, target_lengths)
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, batch_size=pred_log_probs.size(1))
         decode_strings = self.decode_preds(pred_log_probs)
         self.validation_cer(decode_strings, raw_seqs)
-        self.log("validation_cer", self.validation_cer, on_step=True, on_epoch=True)
+        self.log(
+            "validation_cer",
+            self.validation_cer,
+            on_step=True,
+            on_epoch=True,
+            batch_size=pred_log_probs.size(1),
+        )
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
