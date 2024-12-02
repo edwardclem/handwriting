@@ -3,3 +3,5 @@ torch>=2.0.0
 torchvision
 torchmetrics>=1.4
 datasets
+torchaudio
+flashlight-text
