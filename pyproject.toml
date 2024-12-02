@@ -5,11 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hw"
 version = "0.1.0"
-description = "An example Python project"
+description = "Simple handwriting recognition using torch."
 authors = [
-    {name = "Jane Doe", email = "jane.doe@example.com"}
+    {name = "Edward Williams", email = "eddiecwilliams@gmail.com"}
 ]
-license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.8"
 

@@ -5,12 +5,13 @@ import torchvision.transforms.functional as TF
 
 
 # make vocab with blank char as 0
+# blank token encoding from https://pytorch.org/audio/main/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html#tokens
 def make_vocab(dataset):
-    forward_vocab = {}
+    forward_vocab = {"<blk>": 0}
     for entry in dataset:
         for character in entry["text"]:
             if character not in forward_vocab:
-                forward_vocab[character] = len(forward_vocab) + 1
+                forward_vocab[character] = len(forward_vocab)
     inverse_vocab = {idx: char for char, idx in forward_vocab.items()}
     return {"forward": forward_vocab, "reverse": inverse_vocab}
 

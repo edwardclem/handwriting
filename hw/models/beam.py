@@ -1,9 +1,10 @@
 # beam search decoder implementation.
+
+# mostly there for educational reasons. the built in CUCTC decoder is so much faster.
+# not shocking.
+
 import collections
 import math
-
-import numpy as np
-from tqdm import trange
 
 NEG_INF = -float("inf")
 
@@ -39,7 +40,7 @@ def beam_decode(log_probs, beam_size=100, blank=0):
     # (in log space).
     beam = [(tuple(), (0.0, NEG_INF))]
 
-    for t in trange(T, desc="Decoding timesteps"):  # Loop over time
+    for t in range(T):  # Loop over time
         # A default dictionary to store the next step candidates.
         next_beam = make_new_beam()
         for s in range(S):  # loop over vocab
