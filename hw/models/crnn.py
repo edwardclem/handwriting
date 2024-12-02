@@ -5,28 +5,35 @@ from torch import nn, optim
 from torchaudio.models.decoder import cuda_ctc_decoder
 from torchmetrics.text import CharErrorRate
 
+from hw.models.cnn_encoder import ResNetEncoder
+
 
 class CRNN(L.LightningModule):
-    def __init__(self, vocab, img_height=128):
+    def __init__(self, vocab, output_time_steps: int = 96):
         super(CRNN, self).__init__()
 
         self.vocab = vocab
 
         # super simple. Replace with resnet eventually.
-        self.cnn = nn.Sequential(
-            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  # Example Conv Layer
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=4),
-        )
+        # self.cnn = nn.Sequential(
+        #     nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  # Example Conv Layer
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(kernel_size=2, stride=2),
+        #     nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(kernel_size=3, stride=4),
+        # )
 
-        # need a better system for matching these.
+        # b+w for IAM
+        self.cnn = ResNetEncoder(chan_in=1, time_step=output_time_steps)
 
         # Assume the width and height are reduced after convolutions.
         self.rnn = nn.LSTM(
-            32 * (img_height // 4), 256, num_layers=2, bidirectional=True
+            self.cnn.output_hsize,
+            256,
+            num_layers=2,
+            bidirectional=True,
+            batch_first=True,
         )
         self.fc = nn.Linear(512, len(vocab["forward"]))
 
@@ -39,30 +46,27 @@ class CRNN(L.LightningModule):
 
     def forward(self, x):
         # CNN feature extraction
-        x = self.cnn(x)  # Shape: (Batch, Channels, Height, Width)
-        b, c, h, w = x.size()
-        x = x.permute(3, 0, 2, 1).reshape(w, b, -1)  # (Seq_Len, Batch, Features)
+        x = self.cnn(x)  # Shape: (Batch, width, hidden)
 
         # RNN for sequence modeling
+        # shape: batch, width, hidden
         x, _ = self.rnn(x)
 
         # Fully connected layer for predictions
-        x = self.fc(x)  # (Seq_Len, Batch, Num_Classes)
+        x = self.fc(x)  # (batch, seq_len, n_toks)
 
         # pred logprobs
-        return F.log_softmax(x, dim=-1)
+        return F.log_softmax(x, dim=-1)  # seq_len, n_toks
 
     def decode_preds(self, log_probs):
-        # input: seq_len, batch, num_classes
-        # convert to: batch, seq_len, n_classes
-        log_probs_reordered = log_probs.permute(1, 0, 2).contiguous()
+        # input: (batch, seq_len, n_toks)
         # i don't entirely think this is correct. Need to figure out padding.
-        input_lengths = torch.tensor([log_probs.size(0)] * log_probs.size(1)).to(
-            device=log_probs_reordered.device, dtype=torch.int32
+        input_lengths = torch.tensor([log_probs.size(1)] * log_probs.size(0)).to(
+            device=log_probs.device, dtype=torch.int32
         )
 
         # list of CUCTChypothesis
-        decodes = self.decoder(log_probs_reordered, input_lengths)
+        decodes = self.decoder(log_probs, input_lengths)
 
         string_decodes = ["".join(dec[0].words) for dec in decodes]
         return string_decodes
@@ -77,11 +81,14 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, _ = batch
 
         # Predictions and targets
-        pred_log_probs = self(images)  # (Seq_Len, Batch, Num_Classes)
+        pred_log_probs = self(images)  # (batch, seq_len, n_toks)
         # All sequences are the same length after padding
-        input_lengths = torch.tensor([pred_log_probs.size(0)] * pred_log_probs.size(1))
+        input_lengths = torch.tensor([pred_log_probs.size(1)] * pred_log_probs.size(0))
 
-        loss = self.loss(pred_log_probs, target, input_lengths, target_lengths)
+        # need to permute to (seq_len, batch, n_toks)
+        loss = self.loss(
+            pred_log_probs.permute(1, 0, 2), target, input_lengths, target_lengths
+        )
 
         self.log(
             "train_loss",
@@ -99,10 +106,16 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, raw_seqs = batch
 
         # Predictions and targets
-        pred_log_probs = self(images)  # (Seq_Len, Batch, Num_Classes)
+        pred_log_probs = self(images)  # (batch, seq_len, n_toks)
         # All sequences are the same length after padding
-        input_lengths = torch.tensor([pred_log_probs.size(0)] * pred_log_probs.size(1))
-        loss = self.loss(pred_log_probs, target, input_lengths, target_lengths)
+        input_lengths = torch.tensor([pred_log_probs.size(1)] * pred_log_probs.size(0))
+
+        # need to permute to (seq_len, batch, n_toks)
+
+        loss = self.loss(
+            pred_log_probs.permute(1, 0, 2), target, input_lengths, target_lengths
+        )
+
         self.log("val_loss", loss, batch_size=pred_log_probs.size(1), on_epoch=True)
         decode_strings = self.decode_preds(pred_log_probs)
         self.validation_cer(decode_strings, raw_seqs)
@@ -114,5 +127,5 @@ class CRNN(L.LightningModule):
         )
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-2)
+        optimizer = optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
