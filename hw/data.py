@@ -38,6 +38,8 @@ def collate_fn(batch, vocab):
     # Determine the maximum width of images
     max_width = max(img.shape[2] for img in images)
 
+    # TODO: additional aug!!!
+
     # Pad images to the maximum width
     padded_images = torch.stack(
         [
