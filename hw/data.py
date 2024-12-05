@@ -1,7 +1,11 @@
-import torch
-from torch.nn.utils.rnn import pad_sequence
+from functools import partial
 
-import torchvision.transforms.functional as TF
+import lightning as L
+from lightning.pytorch.utilities.types import EVAL_DATALOADERS
+import torch
+from datasets import load_dataset
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
 
@@ -33,20 +37,7 @@ def collate_fn(batch, vocab, xforms):
         sequence_lengths (torch.Tensor): Original lengths of sequences in the batch.
     """
 
-    # Determine the maximum width of images
-    # max_width = max(img.shape[2] for img in images)
-
-    # TODO: additional aug!!!
-
-    # Pad images to the maximum width
-    # padded_images = torch.stack(
-    #     [
-    #         torch.nn.functional.pad(img, (0, max_width - img.shape[2], 0, 0))
-    #         for img in images
-    #     ]
-    # )
-
-    # convert all to same size, possibly too aggressive data aug?
+    # convert all to same size
 
     base_xforms = []
     if xforms:
@@ -77,3 +68,45 @@ def collate_fn(batch, vocab, xforms):
     )
 
     return padded_images, padded_sequences, sequence_lengths, string_seqs
+
+
+class IAMLineDataModule(L.LightningDataModule):
+    def __init__(self, train_xforms=None, batch_size=32, workers=3):
+        super().__init__()
+        self.train_xforms = train_xforms
+        self.batch_size = batch_size
+        self.workers = workers
+
+    def setup(self, stage: str):
+        self.dataset = load_dataset("Teklia/IAM-line")
+        self.vocab = make_vocab(self.dataset["train"])
+
+    def train_dataloader(self):
+        collate_train = partial(collate_fn, vocab=self.vocab, xforms=self.train_xforms)
+        return DataLoader(
+            self.dataset["train"],
+            batch_size=32,
+            shuffle=True,
+            collate_fn=collate_train,
+            num_workers=3,
+        )
+
+    def val_dataloader(self):
+        collate_val = partial(collate_fn, vocab=self.vocab, xforms=None)
+        return DataLoader(
+            self.dataset["validation"],
+            batch_size=32,
+            shuffle=False,
+            collate_fn=collate_val,
+            num_workers=3,
+        )
+
+    def test_dataloader(self):
+        collate_val = partial(collate_fn, vocab=self.vocab, xforms=None)
+        return DataLoader(
+            self.dataset["test"],
+            batch_size=32,
+            shuffle=False,
+            collate_fn=collate_val,
+            num_workers=3,
+        )
