@@ -2,6 +2,7 @@ import torch
 from torch.nn.utils.rnn import pad_sequence
 
 import torchvision.transforms.functional as TF
+from torchvision.transforms import v2
 
 
 # make vocab with blank char as 0
@@ -16,7 +17,7 @@ def make_vocab(dataset):
     return {"forward": forward_vocab, "reverse": inverse_vocab}
 
 
-def collate_fn(batch, vocab):
+def collate_fn(batch, vocab, xforms):
     """
     Collate function for batching (image, sequence) pairs with padding.
 
@@ -31,22 +32,35 @@ def collate_fn(batch, vocab):
         padded_sequences (torch.Tensor): Batch of padded sequences, shape (N, max_seq_len).
         sequence_lengths (torch.Tensor): Original lengths of sequences in the batch.
     """
-    # Separate images and sequences from the batch
-    images = [TF.to_tensor(entry["image"]) for entry in batch]
-    string_seqs = [entry["text"] for entry in batch]
 
     # Determine the maximum width of images
-    max_width = max(img.shape[2] for img in images)
+    # max_width = max(img.shape[2] for img in images)
 
     # TODO: additional aug!!!
 
     # Pad images to the maximum width
-    padded_images = torch.stack(
-        [
-            torch.nn.functional.pad(img, (0, max_width - img.shape[2], 0, 0))
-            for img in images
-        ]
-    )
+    # padded_images = torch.stack(
+    #     [
+    #         torch.nn.functional.pad(img, (0, max_width - img.shape[2], 0, 0))
+    #         for img in images
+    #     ]
+    # )
+
+    # convert all to same size, possibly too aggressive data aug?
+
+    base_xforms = []
+    if xforms:
+        base_xforms += xforms
+    base_xforms += [
+        v2.Resize((128, 1000)),
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+    ]
+
+    pipeline = v2.Compose(base_xforms)
+    padded_images = torch.stack([pipeline(entry["image"]) for entry in batch])
+
+    string_seqs = [entry["text"] for entry in batch]
 
     # convert string sequence to toks
     unpadded_sequences = [

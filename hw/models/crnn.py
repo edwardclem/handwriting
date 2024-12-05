@@ -13,17 +13,6 @@ class CRNN(L.LightningModule):
         super(CRNN, self).__init__()
 
         self.vocab = vocab
-
-        # super simple. Replace with resnet eventually.
-        # self.cnn = nn.Sequential(
-        #     nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1),  # Example Conv Layer
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=2, stride=2),
-        #     nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=1),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=3, stride=4),
-        # )
-
         # b+w for IAM
         self.cnn = ResNetEncoder(chan_in=1, time_step=output_time_steps)
 
@@ -31,7 +20,7 @@ class CRNN(L.LightningModule):
         self.rnn = nn.LSTM(
             self.cnn.output_hsize,
             256,
-            num_layers=2,
+            num_layers=4,
             bidirectional=True,
             batch_first=True,
         )
