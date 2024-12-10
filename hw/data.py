@@ -1,7 +1,7 @@
 from functools import partial
+from typing import List, Dict, Any, Callable, Tuple
 
 import lightning as L
-from lightning.pytorch.utilities.types import EVAL_DATALOADERS
 import torch
 from datasets import load_dataset
 from torch.nn.utils.rnn import pad_sequence
@@ -11,7 +11,7 @@ from torchvision.transforms import v2
 
 # make vocab with blank char as 0
 # blank token encoding from https://pytorch.org/audio/main/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html#tokens
-def make_vocab(dataset):
+def make_vocab(dataset: List[Dict[str, Any]]) -> Dict[str, Dict[Any, Any]]:
     forward_vocab = {"<blk>": 0}
     for entry in dataset:
         for character in entry["text"]:
@@ -21,21 +21,11 @@ def make_vocab(dataset):
     return {"forward": forward_vocab, "reverse": inverse_vocab}
 
 
-def collate_fn(batch, vocab, xforms):
-    """
-    Collate function for batching (image, sequence) pairs with padding.
-
-    Args:
-        batch (list of dicts): A list of dicts.
-            - image: A PIL image.
-            - sequence: A 1D torch.Tensor of variable length.
-        vocab
-
-    Returns:
-        padded_images (torch.Tensor): Batch of images padded to the maximum width, shape (N, C, H, max_W).
-        padded_sequences (torch.Tensor): Batch of padded sequences, shape (N, max_seq_len).
-        sequence_lengths (torch.Tensor): Original lengths of sequences in the batch.
-    """
+def collate_fn(
+    batch: List[Dict[str, Any]],
+    vocab: Dict[str, Dict[Any, Any]],
+    xforms: List[Callable],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
 
     # convert all to same size
 
@@ -82,31 +72,28 @@ class IAMLineDataModule(L.LightningDataModule):
         self.vocab = make_vocab(self.dataset["train"])
 
     def train_dataloader(self):
-        collate_train = partial(collate_fn, vocab=self.vocab, xforms=self.train_xforms)
         return DataLoader(
             self.dataset["train"],
             batch_size=32,
             shuffle=True,
-            collate_fn=collate_train,
+            collate_fn=partial(collate_fn, vocab=self.vocab, xforms=self.train_xforms),
             num_workers=3,
         )
 
     def val_dataloader(self):
-        collate_val = partial(collate_fn, vocab=self.vocab, xforms=None)
         return DataLoader(
             self.dataset["validation"],
             batch_size=32,
             shuffle=False,
-            collate_fn=collate_val,
+            collate_fn=partial(collate_fn, vocab=self.vocab, xforms=None),
             num_workers=3,
         )
 
     def test_dataloader(self):
-        collate_val = partial(collate_fn, vocab=self.vocab, xforms=None)
         return DataLoader(
             self.dataset["test"],
             batch_size=32,
             shuffle=False,
-            collate_fn=collate_val,
+            collate_fn=partial(collate_fn, vocab=self.vocab, xforms=None),
             num_workers=3,
         )
