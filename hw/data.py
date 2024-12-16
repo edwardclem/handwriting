@@ -25,6 +25,7 @@ def collate_fn(
     batch: List[Dict[str, Any]],
     vocab: Dict[str, Dict[Any, Any]],
     xforms: List[Callable],
+    target_size: Tuple[int, int] = (128, 1000),
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
 
     # convert all to same size
@@ -33,7 +34,7 @@ def collate_fn(
     if xforms:
         base_xforms += xforms
     base_xforms += [
-        v2.Resize((128, 1000)),
+        v2.Resize(target_size),
         v2.ToImage(),
         v2.ToDtype(torch.float32, scale=True),
     ]
@@ -53,9 +54,14 @@ def collate_fn(
     sequence_lengths = torch.tensor(
         [seq.shape[0] for seq in unpadded_sequences], dtype=torch.long
     )
-    padded_sequences = pad_sequence(
-        unpadded_sequences, batch_first=True, padding_value=0
-    )
+
+    # concat all sequences!
+
+    padded_sequences = torch.concat(unpadded_sequences)
+
+    # padded_sequences = pad_sequence(
+    #     unpadded_sequences, batch_first=True, padding_value=-1
+    # )
 
     return padded_images, padded_sequences, sequence_lengths, string_seqs
 
