@@ -19,6 +19,8 @@ class CRNN(L.LightningModule):
         intermediate_stride: Tuple[int, int] = (1, 2),
         intermediate_timesteps: int = 96,  # length of sequence the image features are converted to
         blank_idx: int = 0,
+        train_shortcut: bool = True,  # shortcut from https://arxiv.org/abs/2404.11339
+        train_shortcut_weight: float = 0.1,
     ):
         super(CRNN, self).__init__()
         self.save_hyperparameters()
@@ -29,6 +31,9 @@ class CRNN(L.LightningModule):
         self.intermediate_stride = intermediate_stride
         self.lstm_hidden = lstm_hidden
         self.num_lstm_layers = num_lstm_layers
+        self.train_shortcut = train_shortcut
+        self.train_shortcut_weight = train_shortcut_weight
+        self.n_classes = len(vocab)
 
         # b+w for IAM
         self.cnn = ResNetEncoder(
@@ -40,6 +45,14 @@ class CRNN(L.LightningModule):
             output_size=(1, self.intermediate_timesteps)
         )
 
+        # setup training shortcut if provided
+        # simple FC
+        self.shortcut = (
+            nn.Linear(self.cnn.output_hsize, self.n_classes)
+            if self.train_shortcut
+            else None
+        )
+
         # Assume the width and height are reduced after convolutions.
         self.rnn = nn.LSTM(
             self.cnn.output_hsize,
@@ -48,7 +61,7 @@ class CRNN(L.LightningModule):
             bidirectional=True,
             batch_first=True,
         )
-        self.fc = nn.Linear(self.lstm_hidden * 2, len(vocab))
+        self.fc = nn.Linear(self.lstm_hidden * 2, self.n_classes)
 
         self.loss = nn.CTCLoss(blank=self.blank_idx)
         self.validation_cer = CharErrorRate()
@@ -62,6 +75,10 @@ class CRNN(L.LightningModule):
         # amnd reshape to (batch, timesteps, hidden) for RNN input
         x = self.flatten_layer(x).squeeze(dim=2).transpose(1, 2)
 
+        shortcut_preds = (
+            F.log_softmax(self.shortcut(x), dim=-1) if self.shortcut else None
+        )
+
         # RNN for sequence modeling
         # shape: batch, width, hidden
         x, _ = self.rnn(x)
@@ -69,8 +86,9 @@ class CRNN(L.LightningModule):
         # Fully connected layer for predictions
         x = self.fc(x)  # (batch, seq_len, n_toks)
 
-        # pred logprobs
-        return F.log_softmax(x, dim=-1)  # batch, seq_len, n_toks
+        # pred logprobs for both rnn and shortcut
+        # batch, seq_len, n_toks in both cases
+        return F.log_softmax(x, dim=-1), shortcut_preds
 
     def decode_preds(self, log_probs):
         # input: (batch, seq_len, n_toks)
@@ -94,7 +112,7 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, _ = batch
 
         # Predictions and targets
-        pred_log_probs = self(images)  # (batch, seq_len, n_toks)
+        pred_log_probs, shortcut_log_probs = self(images)  # (batch, seq_len, n_toks)
         # All sequences are the same length after padding
         input_lengths = torch.tensor([pred_log_probs.size(1)] * pred_log_probs.size(0))
 
@@ -102,7 +120,6 @@ class CRNN(L.LightningModule):
         loss = self.loss(
             pred_log_probs.permute(1, 0, 2), target, input_lengths, target_lengths
         )
-
         self.log(
             "train_loss",
             loss,
@@ -112,6 +129,31 @@ class CRNN(L.LightningModule):
             batch_size=pred_log_probs.size(1),
         )
 
+        if self.train_shortcut:
+            shortcut_loss = self.train_shortcut_weight * self.loss(
+                shortcut_log_probs.permute(1, 0, 2),
+                target,
+                input_lengths,
+                target_lengths,
+            )
+            self.log(
+                "shortcut_loss",
+                shortcut_loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+            loss += shortcut_loss
+            self.log(
+                "comb_loss",
+                loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -119,7 +161,7 @@ class CRNN(L.LightningModule):
         images, target, target_lengths, raw_seqs = batch
 
         # Predictions and targets
-        pred_log_probs = self(images)  # (batch, seq_len, n_toks)
+        pred_log_probs, shortcut_log_probs = self(images)  # (batch, seq_len, n_toks)
         # All sequences are the same length after padding
         input_lengths = torch.tensor([pred_log_probs.size(1)] * pred_log_probs.size(0))
 
@@ -130,6 +172,31 @@ class CRNN(L.LightningModule):
         )
 
         self.log("val_loss", loss, batch_size=pred_log_probs.size(1), on_epoch=True)
+        if self.train_shortcut:
+            shortcut_loss = self.train_shortcut_weight * self.loss(
+                shortcut_log_probs.permute(1, 0, 2),
+                target,
+                input_lengths,
+                target_lengths,
+            )
+            self.log(
+                "val_shortcut_loss",
+                shortcut_loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+            loss += shortcut_loss
+            self.log(
+                "val_comb_loss",
+                loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+
         decode_strings = self.decode_preds(pred_log_probs)
         self.validation_cer(decode_strings, raw_seqs)
         self.log(
