@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import lightning as L
 import torch
@@ -7,23 +7,24 @@ from torch import nn, optim
 from torchaudio.models.decoder import cuda_ctc_decoder
 from torchmetrics.text import CharErrorRate
 
-from hw.data import CharVocab
 from hw.models.cnn_encoder import ResNetEncoder
 
 
 class CRNN(L.LightningModule):
     def __init__(
         self,
-        vocab: CharVocab,
+        vocab: List[str],  # list of strings, index corresponds to vocab entry
         lstm_hidden: int = 256,
         num_lstm_layers: int = 2,
         intermediate_stride: Tuple[int, int] = (1, 2),
         intermediate_timesteps: int = 96,  # length of sequence the image features are converted to
+        blank_idx: int = 0,
     ):
         super(CRNN, self).__init__()
         self.save_hyperparameters()
 
         self.vocab = vocab
+        self.blank_idx = blank_idx
         self.intermediate_timesteps = intermediate_timesteps
         self.intermediate_stride = intermediate_stride
         self.lstm_hidden = lstm_hidden
@@ -49,9 +50,9 @@ class CRNN(L.LightningModule):
         )
         self.fc = nn.Linear(self.lstm_hidden * 2, len(vocab))
 
-        self.loss = nn.CTCLoss(blank=0)
+        self.loss = nn.CTCLoss(blank=self.blank_idx)
         self.validation_cer = CharErrorRate()
-        self.decoder = cuda_ctc_decoder(vocab.tolist())
+        self.decoder = cuda_ctc_decoder(vocab)
 
     def forward(self, x):
         # CNN feature extraction
