@@ -20,16 +20,16 @@ class CharVocab:
         return len(self.forward_vocab)
 
     @cached_property
-    def reverse_vocab(self):
+    def reverse_vocab(self) -> Dict[int, str]:
         return {idx: char for char, idx in self.forward_vocab.items()}
 
-    def tolist(self):
+    def tolist(self) -> List[str]:
         return [self.reverse_vocab[i] for i in range(len(self))]
 
     # make vocab with blank char as 0
     # blank token encoding from https://pytorch.org/audio/main/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html#tokens
     @classmethod
-    def from_strings(cls, dataset: List[str]):
+    def from_strings(cls, dataset: List[str]) -> "CharVocab":
         forward_vocab = {"<blk>": 0}
         for entry in dataset:
             for character in entry:
