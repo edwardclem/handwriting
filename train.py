@@ -1,7 +1,11 @@
 from time import time
 
 from lightning import Trainer
-from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    LearningRateMonitor,
+    ModelCheckpoint,
+)
 from lightning.pytorch.loggers import TensorBoardLogger
 from torchvision.transforms import v2
 
@@ -33,6 +37,7 @@ trainer = Trainer(
             dirpath=f"artifacts/{prefix}",
         ),
         LearningRateMonitor(logging_interval="step"),
+        EarlyStopping(monitor="val_loss", patience=10, mode="min"),
     ],
 )
 

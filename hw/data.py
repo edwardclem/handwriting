@@ -1,5 +1,6 @@
-from functools import partial
+from functools import partial, cached_property
 from typing import List, Dict, Any, Callable, Tuple
+from dataclasses import dataclass
 
 import lightning as L
 import torch
@@ -9,21 +10,37 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
 
-# make vocab with blank char as 0
-# blank token encoding from https://pytorch.org/audio/main/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html#tokens
-def make_vocab(dataset: List[Dict[str, Any]]) -> Dict[str, Dict[Any, Any]]:
-    forward_vocab = {"<blk>": 0}
-    for entry in dataset:
-        for character in entry["text"]:
-            if character not in forward_vocab:
-                forward_vocab[character] = len(forward_vocab)
-    inverse_vocab = {idx: char for char, idx in forward_vocab.items()}
-    return {"forward": forward_vocab, "reverse": inverse_vocab}
+# simple dataclass encapsulating both forward and reverse character vocab lookup.
+# all computed from mapping {str: vocab_idx}
+@dataclass
+class CharVocab:
+    forward_vocab: Dict[str, int]
+
+    def __len__(self):
+        return len(self.forward_vocab)
+
+    @cached_property
+    def reverse_vocab(self):
+        return {idx: char for char, idx in self.forward_vocab.items()}
+
+    def tolist(self):
+        return [self.reverse_vocab[i] for i in range(len(self))]
+
+    # make vocab with blank char as 0
+    # blank token encoding from https://pytorch.org/audio/main/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html#tokens
+    @classmethod
+    def from_strings(cls, dataset: List[str]):
+        forward_vocab = {"<blk>": 0}
+        for entry in dataset:
+            for character in entry:
+                if character not in forward_vocab:
+                    forward_vocab[character] = len(forward_vocab)
+        return cls(forward_vocab)
 
 
 def collate_fn(
     batch: List[Dict[str, Any]],
-    vocab: Dict[str, Dict[Any, Any]],
+    vocab: CharVocab,
     xforms: List[Callable],
     target_size: Tuple[int, int] = (128, 1000),
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[str]]:
@@ -46,7 +63,7 @@ def collate_fn(
 
     # convert string sequence to toks
     unpadded_sequences = [
-        torch.tensor([vocab["forward"][char] for char in string])
+        torch.tensor([vocab.forward_vocab[char] for char in string])
         for string in string_seqs
     ]
 
@@ -73,9 +90,11 @@ class IAMLineDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.workers = workers
 
-    def setup(self, stage: str):
+    def setup(self, stage: str = None):
         self.dataset = load_dataset("Teklia/IAM-line")
-        self.vocab = make_vocab(self.dataset["train"])
+        self.vocab = CharVocab.from_strings(
+            [entry["text"] for entry in self.dataset["train"]]
+        )
 
     def train_dataloader(self):
         return DataLoader(

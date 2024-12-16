@@ -7,13 +7,14 @@ from torch import nn, optim
 from torchaudio.models.decoder import cuda_ctc_decoder
 from torchmetrics.text import CharErrorRate
 
+from hw.data import CharVocab
 from hw.models.cnn_encoder import ResNetEncoder
 
 
 class CRNN(L.LightningModule):
     def __init__(
         self,
-        vocab,  # must include blank token as token 0
+        vocab: CharVocab,
         lstm_hidden: int = 256,
         num_lstm_layers: int = 2,
         intermediate_stride: Tuple[int, int] = (1, 2),
@@ -46,15 +47,11 @@ class CRNN(L.LightningModule):
             bidirectional=True,
             batch_first=True,
         )
-        #
-        self.fc = nn.Linear(self.lstm_hidden * 2, len(vocab["forward"]))
+        self.fc = nn.Linear(self.lstm_hidden * 2, len(vocab))
 
         self.loss = nn.CTCLoss(blank=0)
-
         self.validation_cer = CharErrorRate()
-
-        vocab_list = [vocab["reverse"][i] for i in range(len(vocab["reverse"]))]
-        self.decoder = cuda_ctc_decoder(vocab_list)
+        self.decoder = cuda_ctc_decoder(vocab.tolist())
 
     def forward(self, x):
         # CNN feature extraction
@@ -76,7 +73,6 @@ class CRNN(L.LightningModule):
 
     def decode_preds(self, log_probs):
         # input: (batch, seq_len, n_toks)
-        # i don't entirely think this is correct. Need to figure out padding.
         input_lengths = torch.tensor([log_probs.size(1)] * log_probs.size(0)).to(
             device=log_probs.device, dtype=torch.int32
         )
