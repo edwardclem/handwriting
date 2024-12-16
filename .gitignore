@@ -8,6 +8,8 @@ __pycache__/
 
 notebooks/
 wandb/
+artifacts/
+tensorboard/
 
 # Distribution / packaging
 .Python

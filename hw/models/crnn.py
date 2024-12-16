@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import lightning as L
 import torch
 import torch.nn.functional as F
@@ -9,22 +11,43 @@ from hw.models.cnn_encoder import ResNetEncoder
 
 
 class CRNN(L.LightningModule):
-    def __init__(self, vocab, output_time_steps: int = 96):
+    def __init__(
+        self,
+        vocab,  # must include blank token as token 0
+        lstm_hidden: int = 256,
+        num_lstm_layers: int = 2,
+        intermediate_stride: Tuple[int, int] = (1, 2),
+        intermediate_timesteps: int = 96,  # length of sequence the image features are converted to
+    ):
         super(CRNN, self).__init__()
+        self.save_hyperparameters()
 
         self.vocab = vocab
+        self.intermediate_timesteps = intermediate_timesteps
+        self.intermediate_stride = intermediate_stride
+        self.lstm_hidden = lstm_hidden
+        self.num_lstm_layers = num_lstm_layers
+
         # b+w for IAM
-        self.cnn = ResNetEncoder(chan_in=1, time_step=output_time_steps)
+        self.cnn = ResNetEncoder(
+            chan_in=1, intermediate_stride=self.intermediate_stride
+        )
+
+        # flattens to (batch, hidden, 1, timesteps)
+        self.flatten_layer = nn.AdaptiveAvgPool2d(
+            output_size=(1, self.intermediate_timesteps)
+        )
 
         # Assume the width and height are reduced after convolutions.
         self.rnn = nn.LSTM(
             self.cnn.output_hsize,
-            256,
-            num_layers=4,
+            self.lstm_hidden,
+            num_layers=self.num_lstm_layers,
             bidirectional=True,
             batch_first=True,
         )
-        self.fc = nn.Linear(512, len(vocab["forward"]))
+        #
+        self.fc = nn.Linear(self.lstm_hidden * 2, len(vocab["forward"]))
 
         self.loss = nn.CTCLoss(blank=0)
 
@@ -35,7 +58,11 @@ class CRNN(L.LightningModule):
 
     def forward(self, x):
         # CNN feature extraction
-        x = self.cnn(x)  # Shape: (Batch, width, hidden)
+        x = self.cnn(x)  # Shape: (Batch, hidden, height, width)
+
+        # flatten to (batch, hidden, timesteps)
+        # amnd reshape to (batch, timesteps, hidden) for RNN input
+        x = self.flatten_layer(x).squeeze(dim=2).transpose(1, 2)
 
         # RNN for sequence modeling
         # shape: batch, width, hidden
@@ -45,7 +72,7 @@ class CRNN(L.LightningModule):
         x = self.fc(x)  # (batch, seq_len, n_toks)
 
         # pred logprobs
-        return F.log_softmax(x, dim=-1)  # seq_len, n_toks
+        return F.log_softmax(x, dim=-1)  # batch, seq_len, n_toks
 
     def decode_preds(self, log_probs):
         # input: (batch, seq_len, n_toks)
@@ -116,5 +143,8 @@ class CRNN(L.LightningModule):
         )
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
+        optimizer = optim.AdamW(self.parameters(), lr=0.0005, weight_decay=0.0001)
+
+        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0005, max_lr=0.01)
+
+        return {"optimizer": optimizer, "lr_scheduler": scheduler}
