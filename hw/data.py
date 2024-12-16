@@ -1,11 +1,10 @@
-from functools import partial, cached_property
-from typing import List, Dict, Any, Callable, Tuple
 from dataclasses import dataclass
+from functools import cached_property, partial
+from typing import Any, Callable, Dict, List, Tuple
 
 import lightning as L
 import torch
 from datasets import load_dataset
-from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
@@ -66,21 +65,14 @@ def collate_fn(
         torch.tensor([vocab.forward_vocab[char] for char in string])
         for string in string_seqs
     ]
-
-    # Pad sequences to the maximum length
+    # get sequence lengths
     sequence_lengths = torch.tensor(
         [seq.shape[0] for seq in unpadded_sequences], dtype=torch.long
     )
-
     # concat all sequences!
+    concat_seqs = torch.concat(unpadded_sequences)
 
-    padded_sequences = torch.concat(unpadded_sequences)
-
-    # padded_sequences = pad_sequence(
-    #     unpadded_sequences, batch_first=True, padding_value=-1
-    # )
-
-    return padded_images, padded_sequences, sequence_lengths, string_seqs
+    return padded_images, concat_seqs, sequence_lengths, string_seqs
 
 
 class IAMLineDataModule(L.LightningDataModule):
