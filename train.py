@@ -18,8 +18,7 @@ xforms = [
     v2.RandomPerspective(distortion_scale=0.1),
 ]
 
-prefix = int(time())
-
+epoch = int(time())
 
 datamodule = IAMLineDataModule(train_xforms=xforms, batch_size=32, workers=3)
 # this is just b/c I have the vocab defined in the datamodule
@@ -27,26 +26,20 @@ datamodule.setup("")
 trainer = Trainer(
     accelerator="gpu",
     devices=1,
-    logger=TensorBoardLogger("tensorboard", version=prefix),
+    logger=TensorBoardLogger("tensorboard", version=epoch),
     max_epochs=1000,
     callbacks=[
         ModelCheckpoint(
             monitor="val_loss",
             save_top_k=5,
             save_last=True,
-            dirpath=f"artifacts/{prefix}",
+            dirpath=f"artifacts/{epoch}",
         ),
         LearningRateMonitor(logging_interval="step"),
         EarlyStopping(monitor="val_loss", patience=10, mode="min"),
     ],
 )
 
-model = CRNN(vocab=datamodule.vocab)
-
-# # load checkpoint - need to figure out how to save vocab properly here
-# model = CRNN.load_from_checkpoint(
-#     "artifacts/model-gynv7eg7:v47/model.ckpt", vocab=datamodule.vocab
-# )
-
+model = CRNN(vocab=datamodule.vocab.tolist())
 
 trainer.fit(model, datamodule=datamodule)
