@@ -13,7 +13,7 @@ from hw.data import IAMLineDataModule
 from hw.models.crnn import CRNN
 
 xforms = [
-    v2.RandomAffine(1),
+    v2.RandomAffine(5, translate=(0.05, 0.05), scale=(0.95, 1), shear=5),
     v2.RandomZoomOut(side_range=(1, 1.5)),
     v2.RandomPerspective(distortion_scale=0.1),
 ]
