@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import List, Tuple
 
 import lightning as L
@@ -8,6 +9,24 @@ from torchaudio.models.decoder import cuda_ctc_decoder
 from torchmetrics.text import CharErrorRate
 
 from hw.models.cnn_encoder import ResNetEncoder
+
+
+@dataclass
+class GreedyDecoderResult:
+    words: List[str]
+
+
+class GreedyDecoder:
+    def __init__(self, vocab):
+        self.vocab = vocab
+
+    def __call__(self, log_probs: torch.Tensor):
+
+        selected_tokens = log_probs.argmax(dim=2).cpu().tolist()
+
+        decodes = []
+
+        pass
 
 
 class CRNN(L.LightningModule):
@@ -21,6 +40,7 @@ class CRNN(L.LightningModule):
         blank_idx: int = 0,
         train_shortcut: bool = True,  # shortcut from https://arxiv.org/abs/2404.11339
         train_shortcut_weight: float = 0.1,
+        decoder: str = "cuda_ctc",
     ):
         super(CRNN, self).__init__()
         self.save_hyperparameters()
@@ -34,6 +54,7 @@ class CRNN(L.LightningModule):
         self.train_shortcut = train_shortcut
         self.train_shortcut_weight = train_shortcut_weight
         self.n_classes = len(vocab)
+        self.decoder = decoder
 
         # b+w for IAM
         self.cnn = ResNetEncoder(
@@ -65,7 +86,10 @@ class CRNN(L.LightningModule):
 
         self.loss = nn.CTCLoss(blank=self.blank_idx)
         self.validation_cer = CharErrorRate()
-        self.decoder = cuda_ctc_decoder(vocab)
+        if decoder == "cuda_ctc":
+            self.decoder = cuda_ctc_decoder(vocab)
+        elif decoder == "greedy":
+            self.decoder = GreedyDecoder(vocab)
 
     def forward(self, x):
         # CNN feature extraction
@@ -209,6 +233,6 @@ class CRNN(L.LightningModule):
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=0.0005, weight_decay=0.0001)
 
-        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0005, max_lr=0.01)
+        scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0005, max_lr=0.005)
 
         return {"optimizer": optimizer, "lr_scheduler": scheduler}
