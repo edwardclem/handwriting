@@ -26,7 +26,7 @@ An example training script can be found in `train.py`, which uses the Lighting `
 - Putting this together was overall not too tricky - but I spent forever figuring out that the order of the `AdaptiveAveragePool` dimensions should be _reversed_ from how it was used in the initial implementation I started working with. Oddly enough, the usual learning-not-working debug trick of trying to overfit on a small dataset still worked. I find it helpful to think through the shapes of the CNN feature maps when debugging anything CNN/ResNet related
 - I didn't find the shortcut trick from [this paper](https://arxiv.org/abs/2404.11339) terribly helpful, but it's a fun idea. Currently it's implemented as the default `CRNN` option, but it can be easily disabled.
 - I didn't end up putting a language model in here - that would require using a different decoder as well.   
-- I was surprised to learn that beam search decoding doesn't actually do much for you here. 
+- I found that beam search only improves aggregate CER by a percentage point or so, but, anecdotally, the results are much better. Makes me think there's something misleading about CER? Probably a WER vs CER sort of thing?
 
 ## Notebooks
 

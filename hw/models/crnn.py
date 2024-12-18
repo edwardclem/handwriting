@@ -1,3 +1,4 @@
+import itertools
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -20,13 +21,22 @@ class GreedyDecoder:
     def __init__(self, vocab):
         self.vocab = vocab
 
-    def __call__(self, log_probs: torch.Tensor):
+    def __call__(self, log_probs: torch.Tensor, _) -> List[GreedyDecoderResult]:
 
         selected_tokens = log_probs.argmax(dim=2).cpu().tolist()
 
         decodes = []
 
-        pass
+        for tok_seq in selected_tokens:
+            raw_decode = [self.vocab[i] for i in tok_seq]
+            # merge duplicates and remove blank tokens
+            final_decode = [
+                k for k, g in itertools.groupby(raw_decode) if k != self.vocab[0]
+            ]
+            #
+            decodes.append((GreedyDecoderResult(final_decode),))
+
+        return decodes
 
 
 class CRNN(L.LightningModule):
