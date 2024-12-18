@@ -7,6 +7,11 @@ Simple CRNN handwriting recognition.
 The goal of this repo is to implement a simple CRNN for line-level handwriting recognition method. The implementation in `hw/models/crnn.py` contains a `LightningModule` that uses a ResNet image feature encoder (implemented in `hw/models/cnn_encoder.py`) and a few LSTM layers to perform the final sequence prediction. The model is trained using the `CTCLoss` implemented in `torch.nn` and beam-search inference is performed using either greedy decoding or the beam search decoders from `torchvision`. 
 
 
+## Installation
+
+clone and:
+
+    pip install .
 
 ## Dataset
 
@@ -14,7 +19,7 @@ The IAM-Line dataset is pulled from huggingface datasets, specifically [this one
 
 ## Training
 
-An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of 0.063 on the IAM validation partition and the provided set of data augmentations.
+An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of around 0.063 on the IAM validation partition and the provided set of data augmentations in about ~2 hours (100 epochs) on an RTX 2070. 
 
 ## Notes
 
