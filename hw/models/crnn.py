@@ -84,8 +84,9 @@ class CRNN(L.LightningModule):
         )
         self.fc = nn.Linear(self.lstm_hidden * 2, self.n_classes)
 
-        self.loss = nn.CTCLoss(blank=self.blank_idx)
+        self.loss = nn.CTCLoss(blank=self.blank_idx, zero_infinity=True)
         self.validation_cer = CharErrorRate()
+        self.test_cer = CharErrorRate()
         if decoder == "cuda_ctc":
             self.decoder = cuda_ctc_decoder(vocab)
         elif decoder == "greedy":
@@ -129,7 +130,8 @@ class CRNN(L.LightningModule):
     @torch.no_grad
     def decode(self, x):
         # e2e decoder function.
-        return self.decode_preds(self(x))
+        log_probs, _ = self(x)
+        return self.decode_preds(log_probs)
 
     def training_step(self, batch, batch_idx):
 
@@ -226,6 +228,55 @@ class CRNN(L.LightningModule):
         self.log(
             "validation_cer",
             self.validation_cer,
+            on_epoch=True,
+            batch_size=pred_log_probs.size(1),
+        )
+
+    def test_step(self, batch, batch_idx):
+        images, target, target_lengths, raw_seqs = batch
+
+        # Predictions and targets
+        pred_log_probs, shortcut_log_probs = self(images)  # (batch, seq_len, n_toks)
+        # All sequences are the same length after padding
+        input_lengths = torch.tensor([pred_log_probs.size(1)] * pred_log_probs.size(0))
+
+        # need to permute to (seq_len, batch, n_toks)
+
+        loss = self.loss(
+            pred_log_probs.permute(1, 0, 2), target, input_lengths, target_lengths
+        )
+
+        self.log("test_loss", loss, batch_size=pred_log_probs.size(1), on_epoch=True)
+        if self.train_shortcut:
+            shortcut_loss = self.train_shortcut_weight * self.loss(
+                shortcut_log_probs.permute(1, 0, 2),
+                target,
+                input_lengths,
+                target_lengths,
+            )
+            self.log(
+                "test_shortcut_loss",
+                shortcut_loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+            loss += shortcut_loss
+            self.log(
+                "test_comb_loss",
+                loss,
+                prog_bar=True,
+                on_step=True,
+                on_epoch=True,
+                batch_size=pred_log_probs.size(1),
+            )
+
+        decode_strings = self.decode_preds(pred_log_probs)
+        self.test_cer(decode_strings, raw_seqs)
+        self.log(
+            "test_cer",
+            self.test_cer,
             on_epoch=True,
             batch_size=pred_log_probs.size(1),
         )
