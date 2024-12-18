@@ -6,11 +6,18 @@ build-backend = "setuptools.build_meta"
 name = "hw"
 version = "0.1.0"
 description = "Simple handwriting recognition using torch."
-authors = [
-    {name = "Edward Williams", email = "eddiecwilliams@gmail.com"}
-]
+authors = [{ name = "Edward Williams", email = "eddiecwilliams@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.8"
+dependencies = [
+    "lightning>=2.0.0",
+    "torch>=2.0.0",
+    "torchvision",
+    "torchmetrics>=1.4",
+    "datasets",
+    "torchaudio",
+    "flashlight-text",
+]
 
 [tool.setuptools.packages]
-find = {include = ["hw*", "hw"]}
+find = { include = ["hw*", "hw"] }
