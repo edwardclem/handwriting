@@ -19,14 +19,14 @@ The IAM-Line dataset is pulled from huggingface datasets, specifically [this one
 
 ## Training
 
-An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of around 0.063 on the IAM validation partition and the provided set of data augmentations in about ~2 hours (100 epochs) on an RTX 2070. 
+An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of around 0.063 on the IAM validation partition (with CER!) and the provided set of data augmentations in about ~2 hours (100 epochs) on an RTX 2070. 
 
 ## Notes
 
 - Putting this together was overall not too tricky - but I spent forever figuring out that the order of the `AdaptiveAveragePool` dimensions should be _reversed_ from how it was used in the initial implementation I started working with. Oddly enough, the usual learning-not-working debug trick of trying to overfit on a small dataset still worked. I find it helpful to think through the shapes of the CNN feature maps when debugging anything CNN/ResNet related
 - I didn't find the shortcut trick from [this paper](https://arxiv.org/abs/2404.11339) terribly helpful, but it's a fun idea. Currently it's implemented as the default `CRNN` option, but it can be easily disabled.
 - I didn't end up putting a language model in here - that would require using a different decoder as well.   
-- I found that beam search only improves aggregate CER by a percentage point or so, but, anecdotally, the results are much better. Makes me think there's something misleading about CER? Probably a WER vs CER sort of thing?
+- I found that beam search only improves aggregate CER by a percentage point or so, but, anecdotally, the results are much better. Makes me think there's something misleading about CER? Probably a WER vs CER sort of thing? This might be worth poking at further. 
 
 ## Notebooks
 
