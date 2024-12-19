@@ -30,7 +30,7 @@ An example training script can be found in `train.py`, which uses the Lighting `
 
 ## Notebooks
 
-I've provided a few example notebooks - `examples/dataset.ipynb` has some poking around in the IAM dataset, and `examples/inference.ipynb` has some inference examples and test-time stats. 
+I've provided a few example notebooks - `examples/dataset.ipynb` has some poking around in the IAM dataset, and `examples/inference.ipynb` has some inference examples and test-time stats. The provided artifact was trained without the training shortcut. 
 
 ## Citations
 
