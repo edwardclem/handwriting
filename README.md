@@ -19,7 +19,7 @@ The IAM-Line dataset is pulled from huggingface datasets, specifically [this one
 
 ## Training
 
-An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of around 0.063 on the IAM validation partition (with CER!) and the provided set of data augmentations in about ~2 hours (100 epochs) on an RTX 2070. 
+An example training script can be found in `train.py`, which uses the Lighting `Trainer` abstraction and some callbacks to fit a model from scratch. I can get a character error rate of around 0.063 on the IAM validation partition (with beam search decoding!) and the provided set of data augmentations in about ~2 hours (100 epochs) on an RTX 2070. 
 
 ## Notes
 
